@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.version           = RakeRepl::VERSION
   s.date              = Time.now.strftime('%Y-%m-%d')
   s.summary           = "Interactive Rake prompt"
-  s.homepage          = "http://github.com/exploid/rake-repl"
+  s.homepage          = "http://documentup.com/exploid/rake-repl"
   s.email             = "vince@vroy.ca"
   s.authors           = [ "Vincent Roy" ]
   s.has_rdoc          = false
