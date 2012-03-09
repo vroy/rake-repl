@@ -1,6 +1,6 @@
 # Rake REPL
 
-Interactive prompt for Rake.
+Interactive Rake prompt. Load your Rake environment once, and get a nice REPL.
 
 ## Install
 
