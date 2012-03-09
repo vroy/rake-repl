@@ -1,0 +1,138 @@
+#!/usr/bin/env ruby
+
+# Rake REPL (read-eval-print loop)
+#
+# Load your Rake environment once and get an interactive program to execute multiple tasks easily.
+
+# If rlwrap exists, wrap our REPL to get all the nice benefits of readline.
+if !ENV['__REPL_WRAPPED'] && system("which rlwrap > /dev/null 2> /dev/null")
+  ENV['__REPL_WRAPPED'] = '0'
+  exec "rlwrap #$0 #{ARGV.join(' ')}"
+end
+
+begin
+  require 'rubygems'
+  gem 'rake'
+rescue LoadError
+end
+
+require "rake"
+
+Rake.application.init
+Rake.application.load_rakefile
+
+task :list do
+  Rake.application.tasks.each do |task|
+    puts "#{task.name_with_args}"
+  end
+end
+
+module Rake
+  class Application
+    def reset_options
+      @options = OpenStruct.new
+    end
+  end
+end
+
+def invoke_two(input)
+  # Save the current environment
+  tmp_env = { }
+  ENV.each{|k, v| tmp_env[k] = v }
+
+  cmd = %(ARGV = #{input.split(" ").inspect})
+
+  # Update stderr so that when we run the eval command and dynamically assign a
+  # constant, we don't get a message in the REPL.
+  silence = $stderr
+  $stderr = File.open("/dev/null", "w")
+  eval(cmd)
+  $stderr = silence
+
+  Rake.application.reset_options
+  Rake.application.init
+  Rake.application.tasks.each do |task|
+    task.reenable
+  end
+  Rake.application.top_level
+
+  # Reset the environment to what was saved before 
+  ENV.each{|k, v| ENV.delete(k) }
+  tmp_env.each{|k, v| ENV[k] = v }
+end
+
+
+# Set the prompt string to "rake >> " or the string defined by ENV["RAKE_REPL_PROMPT"]
+# An example of ENV["RAKE_REPL_PROMPT"]
+#     "[red:rake][blue: >>][ ]"
+
+$prompt_string = "rake >> "
+if ENV["RAKE_REPL_PROMPT"]
+  begin
+    require "colorize"
+
+    $prompt_string = ""
+    ENV["RAKE_REPL_PROMPT"].scan(/\[((\w+):)?([^\[]*)\]/).each do |color_wrapper, color, text|
+      $prompt_string << ((color.nil?) ? text : "#{text.send(color)}")
+    end
+  rescue LoadError
+    puts "Couldn't require colorize, please run `gem install colorize` for a custom RAKE_REPL_PROMPT."
+  end
+end
+
+loop do
+  print $prompt_string
+
+  begin
+    line = $stdin.gets.chomp
+  rescue NoMethodError, Interrupt
+    exit
+  end
+
+  next if line.empty?
+
+  if line =~ /^(exit|quit)$/
+    puts "Use Ctrl-D (i.e. EOF) to exit"
+    next
+  end
+
+  begin
+    invoke_two(line)
+    puts
+  rescue SystemExit => e
+    # ignore exit's from rake's command, like the exit on -H
+  rescue Exception => e
+    puts "#{e.class} - #{e}"
+    puts e.backtrace
+  end
+end
+
+
+
+
+__END__
+=begin
+# A nicer way to handle invoking the task, but this would require us to parse
+# the arguments ourselves. Simulating Rake.application.run without the
+# load_rakefile seems like a better option to be Rake compatible as much as
+# possible.
+def invoke_task(input)
+  parts = input.split(" ")
+  task = parts.shift
+
+  tmp_env = {}
+  parts.each do |e|
+    key, value = e.split("=")
+    tmp_env[key] = ENV[key]
+    ENV[key] = value
+  end
+
+  Rake::Task[task].reenable
+  Rake::Task[task].invoke
+
+  # Cleanup ENV from this rake task run.
+  tmp_env.each do |key, value|
+    ENV.delete(key)
+  end
+end
+=end
